@@ -1,0 +1,27 @@
+# Model weights (GitHub has a 100MB file limit)
+*.pt
+*.onnx
+*.engine
+*.weights
+
+# Datasets
+MVRSD_dataset/
+data/
+
+# Training artifacts & runs
+results/
+runs/
+*.cache
+*.pt.old
+*.log
+
+# Python & environments
+__pycache__/
+*.pyc
+venv/
+.env
+
+# OS + IDE stuff
+.DS_Store
+Thumbs.db
+.vscode/
