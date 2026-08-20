@@ -116,7 +116,7 @@ This project is released under the MIT License. You are free to use, modify, and
 
 ## 🙋‍♂️ Author
 
-**Yusuf Soylemez**\
+**Prince Khalane**\
 Aspired AI Engineer | Passionate about computer vision, real-time systems, and ML pipelines.
 
 ---
