@@ -7,20 +7,29 @@ Uses the trained YOLOv8n model to detect 5 classes:
 import os
 import glob
 import random
-import gradio as gr
 import cv2
 import numpy as np
+import streamlit as st
 from ultralytics import YOLO
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WEIGHTS  = os.path.join(BASE_DIR, "results", "my_8n_run", "weights", "best.pt")
+WEIGHT_CANDIDATES = (
+    os.path.join(BASE_DIR, "best.pt"),
+    os.path.join(BASE_DIR, "results", "my_8n_run", "weights", "best.pt"),
+)
+WEIGHTS = next((path for path in WEIGHT_CANDIDATES if os.path.isfile(path)), WEIGHT_CANDIDATES[0])
 VAL_DIR  = os.path.join(BASE_DIR, "data", "images", "val")
 
-# ── Load model once at startup ───────────────────────────────────────────────
-print(f"Loading model from: {WEIGHTS}")
-model = YOLO(WEIGHTS)
-print("Model loaded successfully!")
+@st.cache_resource
+def load_model():
+    """Load the detector once per Streamlit process."""
+    if not os.path.isfile(WEIGHTS):
+        raise FileNotFoundError(
+            "Model weights were not found. Place best.pt in the project root "
+            "or train the model so it is saved under results/my_8n_run/weights/."
+        )
+    return YOLO(WEIGHTS)
 
 # ── Class info ───────────────────────────────────────────────────────────────
 CLASS_INFO = {
@@ -37,12 +46,12 @@ random.seed(42)
 SAMPLE_PATHS = random.sample(ALL_VAL_IMAGES, min(12, len(ALL_VAL_IMAGES)))
 
 # ── Detection function ───────────────────────────────────────────────────────
-def detect_vehicles(image, confidence_threshold, iou_threshold):
+def detect_vehicles(image, confidence_threshold, iou_threshold, detector):
     """Run YOLOv8 inference and return annotated image + detection summary."""
     if image is None:
         return None, "⚠️ Please upload an image first."
 
-    results = model.predict(
+    results = detector.predict(
         source=image,
         conf=confidence_threshold,
         iou=iou_threshold,
@@ -109,71 +118,92 @@ def load_random_sample():
     return img
 
 
-# ── Build UI ─────────────────────────────────────────────────────────────────
-with gr.Blocks(
-    title="Military Vehicle Detection — YOLOv8",
-) as demo:
+st.set_page_config(page_title="Military Vehicle Detection", page_icon="🎖️", layout="wide")
 
-    gr.HTML("""
-    <div style="text-align:center; background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
-                color:white; padding:24px; border-radius:12px; margin-bottom:16px;">
-        <h1 style="margin:0; font-size:2em; letter-spacing:1px;">🎖️ Military Vehicle Detection System</h1>
-        <p style="margin:8px 0 0 0; opacity:0.85; font-size:1.05em;">
-            YOLOv8n • MV-RSD Dataset • 5 Classes: LMV / SMV / MCV / CV / AFV
-        </p>
-        <p style="font-size:0.85em; margin-top:12px; opacity:0.7;">
-            Model: best.pt (epoch 47) &nbsp;|&nbsp; mAP50: 85.9% &nbsp;|&nbsp; mAP50-95: 59.2% &nbsp;|&nbsp; ~149 FPS
-        </p>
-    </div>
-    """)
+st.markdown("""
+<style>
+.hero { background: linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+        color: white; padding: 24px; border-radius: 12px; text-align: center; }
+</style>
+<div class="hero">
+<h1>🎖️ Military Vehicle Detection System</h1>
+<p>YOLOv8n • MV-RSD Dataset • 5 Classes: LMV / SMV / MCV / CV / AFV</p>
+<p>Model: best.pt (epoch 47) | mAP50: 85.9% | mAP50-95: 59.2%</p>
+</div>
+""", unsafe_allow_html=True)
 
-    with gr.Row():
-        with gr.Column(scale=1):
-            input_image = gr.Image(
-                label="📸 Input Image",
-                type="numpy",
-                height=420,
-            )
+try:
+    model = load_model()
+except FileNotFoundError as error:
+    st.error(str(error))
+    st.stop()
 
-            with gr.Row():
-                conf_slider = gr.Slider(
-                    minimum=0.1, maximum=0.95, value=0.25, step=0.05,
-                    label="Confidence Threshold",
-                    info="Minimum confidence to show a detection"
-                )
-                iou_slider = gr.Slider(
-                    minimum=0.1, maximum=0.95, value=0.45, step=0.05,
-                    label="IoU Threshold (NMS)",
-                    info="Non-max suppression overlap threshold"
-                )
-
-            with gr.Row():
-                detect_btn = gr.Button("🔍 Detect Vehicles", variant="primary", size="lg")
-                random_btn = gr.Button("🎲 Random Val Image", variant="secondary", size="lg")
-
-        with gr.Column(scale=1):
-            output_image = gr.Image(
-                label="🎯 Detection Result",
-                type="numpy",
-                height=420,
-            )
-            detection_info = gr.Markdown(
-                value="### Upload an image and click **Detect Vehicles** to begin.",
-            )
-
-    gr.Markdown("### 📂 Sample Images from Validation Set\nClick any image to load it for detection.")
-    sample_gallery = gr.Gallery(
-        value=SAMPLE_PATHS,
-        label="Validation Samples",
-        columns=6,
-        rows=2,
-        height=200,
-        object_fit="cover",
-        allow_preview=False,
+st.subheader("Detect vehicles")
+left, right = st.columns(2)
+with left:
+    uploaded_file = st.file_uploader("📸 Input Image", type=["jpg", "jpeg", "png"])
+    confidence_threshold = st.slider(
+        "Confidence Threshold", 0.1, 0.95, 0.25, 0.05,
+        help="Minimum confidence to show a detection",
+    )
+    iou_threshold = st.slider(
+        "IoU Threshold (NMS)", 0.1, 0.95, 0.45, 0.05,
+        help="Non-max suppression overlap threshold",
     )
 
-    with gr.Accordion("📊 Model Performance Summary", open=False):
-        gr.Markdown("""
+    sample_options = ["Select a validation sample"] + SAMPLE_PATHS
+    selected_sample = st.selectbox("📂 Validation Samples", sample_options)
+    detect_clicked = st.button("🔍 Detect Vehicles", type="primary", use_container_width=True)
+    random_clicked = st.button("🎲 Random Val Image", use_container_width=True)
+
+with right:
+    st.subheader("🎯 Detection Result")
+    output_placeholder = st.empty()
+    info_placeholder = st.empty()
+
+image = None
+if uploaded_file is not None:
+    image_bytes = uploaded_file.getvalue()
+    image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+    if image is not None:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+elif selected_sample != "Select a validation sample":
+    image = cv2.imread(selected_sample)
+    if image is not None:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+elif random_clicked:
+    image = load_random_sample()
+
+if random_clicked and image is not None:
+    st.session_state["selected_image"] = image
+elif image is not None:
+    st.session_state["selected_image"] = image
+else:
+    image = st.session_state.get("selected_image")
+
+if detect_clicked or random_clicked:
+    if image is None:
+        info_placeholder.warning("Please upload an image or choose a validation sample first.")
+    else:
+        try:
+            annotated, summary = detect_vehicles(
+                image, confidence_threshold, iou_threshold, model
+            )
+            st.session_state["annotated_image"] = annotated
+            st.session_state["detection_summary"] = summary
+        except Exception as error:
+            info_placeholder.error(f"Detection failed: {error}")
+
+if "annotated_image" in st.session_state:
+    output_placeholder.image(
+        st.session_state["annotated_image"],
+        caption="Detected vehicles",
+                width="stretch",
+    )
+    info_placeholder.markdown(st.session_state["detection_summary"])
+
+with st.expander("📊 Model Performance Summary"):
+    st.markdown("""
 | Metric | Overall | LMV | SMV | MCV | CV | AFV |
 |--------|---------|-----|-----|-----|----|----|
 | **Precision** | 0.837 | 0.891 | 0.854 | 0.853 | 0.944 | 0.644 |
@@ -183,55 +213,4 @@ with gr.Blocks(
 
 **Architecture:** YOLOv8n (3.0M params, 8.1 GFLOPs) — trained for 50 epochs on MV-RSD
 **Best checkpoint:** Epoch 47 | **Inference speed:** ~5.2ms/image on RTX 3050
-        """)
-
-    # ── Events ──
-    detect_btn.click(
-        fn=detect_vehicles,
-        inputs=[input_image, conf_slider, iou_slider],
-        outputs=[output_image, detection_info],
-    )
-
-    random_btn.click(
-        fn=load_random_sample,
-        inputs=[],
-        outputs=[input_image],
-    ).then(
-        fn=detect_vehicles,
-        inputs=[input_image, conf_slider, iou_slider],
-        outputs=[output_image, detection_info],
-    )
-
-    def on_gallery_select(evt: gr.SelectData):
-        """Load clicked gallery image."""
-        val = evt.value
-        # Gradio 6 gallery returns dict with image info
-        if isinstance(val, dict):
-            path = val.get("image", {}).get("path", "") if isinstance(val.get("image"), dict) else val.get("url", val.get("path", ""))
-        elif isinstance(val, str):
-            path = val
-        else:
-            return None
-        img = cv2.imread(path)
-        if img is not None:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        return img
-
-    sample_gallery.select(
-        fn=on_gallery_select,
-        inputs=[],
-        outputs=[input_image],
-    )
-
-
-# ── Launch ───────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("  Military Vehicle Detection — Demo UI")
-    print("  Open http://localhost:7860 in your browser")
-    print("="*60 + "\n")
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=True,
-    )
+    """)

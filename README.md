@@ -106,6 +106,24 @@ Install dependencies (recommended inside a virtual environment):
 pip install -r requirements.txt
 ```
 
+## Run the Streamlit demo
+
+Place the trained `best.pt` file in the project root, then run:
+
+```bash
+streamlit run app.py
+```
+
+Open `http://localhost:8501` in your browser. The app supports image upload,
+confidence and IoU controls, random validation images, and model performance
+details.
+
+### Hugging Face Spaces
+
+Create a Space using the **Streamlit** SDK and upload the repository files,
+including `best.pt` (or add it through Git LFS). Spaces will start the app
+automatically with `streamlit run app.py`.
+
 ---
 
 ## ⚖️ License
