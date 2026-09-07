@@ -108,10 +108,16 @@ def detect_vehicles(image, confidence_threshold, iou_threshold, detector):
 
 
 def load_random_sample():
-    """Load a random image from the validation set and run detection."""
-    if not ALL_VAL_IMAGES:
+    """Load a random validation image, avoiding the previous image."""
+    previous_path = st.session_state.get("random_sample_path")
+    candidates = [path for path in ALL_VAL_IMAGES if path != previous_path]
+    if not candidates:
+        candidates = ALL_VAL_IMAGES
+    if not candidates:
         return None
-    chosen = random.choice(ALL_VAL_IMAGES)
+
+    chosen = random.choice(candidates)
+    st.session_state["random_sample_path"] = chosen
     img = cv2.imread(chosen)
     if img is not None:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -142,6 +148,23 @@ st.subheader("Detect vehicles")
 left, right = st.columns(2)
 with left:
     uploaded_file = st.file_uploader("📸 Input Image", type=["jpg", "jpeg", "png"])
+    sample_options = ["Select a validation sample"] + SAMPLE_PATHS
+    selected_sample = st.selectbox(
+        "📂 Validation Samples",
+        sample_options,
+        index=sample_options.index(st.session_state.get("selected_sample", sample_options[0]))
+        if st.session_state.get("selected_sample", sample_options[0]) in sample_options
+        else 0,
+    )
+    st.session_state["selected_sample"] = selected_sample
+    detect_clicked = st.button("🔍 Detect Vehicles", type="primary", use_container_width=True)
+    random_clicked = st.button("🎲 Random Val Image", use_container_width=True)
+
+if random_clicked:
+    st.session_state["selected_sample"] = sample_options[0]
+
+with st.sidebar:
+    st.header("⚙️ Settings")
     confidence_threshold = st.slider(
         "Confidence Threshold", 0.1, 0.95, 0.25, 0.05,
         help="Minimum confidence to show a detection",
@@ -150,11 +173,7 @@ with left:
         "IoU Threshold (NMS)", 0.1, 0.95, 0.45, 0.05,
         help="Non-max suppression overlap threshold",
     )
-
-    sample_options = ["Select a validation sample"] + SAMPLE_PATHS
-    selected_sample = st.selectbox("📂 Validation Samples", sample_options)
-    detect_clicked = st.button("🔍 Detect Vehicles", type="primary", use_container_width=True)
-    random_clicked = st.button("🎲 Random Val Image", use_container_width=True)
+    st.caption("These settings match the controls in the original Gradio interface.")
 
 with right:
     st.subheader("🎯 Detection Result")
@@ -162,7 +181,9 @@ with right:
     info_placeholder = st.empty()
 
 image = None
-if uploaded_file is not None:
+if random_clicked:
+    image = load_random_sample()
+elif uploaded_file is not None:
     image_bytes = uploaded_file.getvalue()
     image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
     if image is not None:
@@ -171,8 +192,11 @@ elif selected_sample != "Select a validation sample":
     image = cv2.imread(selected_sample)
     if image is not None:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-elif random_clicked:
-    image = load_random_sample()
+
+if image is None and st.session_state.get("random_sample_path"):
+    image = cv2.imread(st.session_state["random_sample_path"])
+    if image is not None:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 if random_clicked and image is not None:
     st.session_state["selected_image"] = image
@@ -180,6 +204,10 @@ elif image is not None:
     st.session_state["selected_image"] = image
 else:
     image = st.session_state.get("selected_image")
+
+if image is not None:
+    with left:
+        st.image(image, caption="Input image", use_container_width=True)
 
 if detect_clicked or random_clicked:
     if image is None:
@@ -198,7 +226,7 @@ if "annotated_image" in st.session_state:
     output_placeholder.image(
         st.session_state["annotated_image"],
         caption="Detected vehicles",
-                width="stretch",
+        width="stretch",
     )
     info_placeholder.markdown(st.session_state["detection_summary"])
 
