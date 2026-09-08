@@ -747,6 +747,7 @@ with left:
 
 if random_clicked:
     st.session_state["selected_sample"] = SAMPLE_OPTIONS[0]
+    st.session_state["loaded_run_id"] = None
 
 with st.sidebar:
     st.header(f"⚙️ {labels['settings']}")
