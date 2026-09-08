@@ -7,6 +7,7 @@ Uses the trained YOLOv8n model to detect 5 classes:
 import os
 import glob
 import random
+from datetime import datetime
 import cv2
 import numpy as np
 import streamlit as st
@@ -40,6 +41,65 @@ CLASS_INFO = {
     "AFV": {"full": "Armored Fighting Vehicle","color": (155, 89, 182), "emoji": "🛡️"},
 }
 
+TRANSLATIONS = {
+    "English": {
+        "settings": "Settings", "theme": "Display Theme", "language": "Language",
+        "confidence": "Confidence Threshold", "iou": "IoU Threshold (NMS)",
+        "image_size": "Inference Image Size", "max_detections": "Maximum Detections",
+        "run_history": "Run History", "clear_history": "Clear history",
+        "detect": "Detect Vehicles", "random": "Random Val Image",
+        "sample": "Sample Image", "input": "Input Image", "result": "Detection Result",
+    },
+    "Hindi": {
+        "settings": "सेटिंग्स", "theme": "डिस्प्ले थीम", "language": "भाषा",
+        "confidence": "विश्वास सीमा", "iou": "IoU सीमा (NMS)",
+        "image_size": "इन्फरेंस इमेज आकार", "max_detections": "अधिकतम पहचान",
+        "run_history": "रन इतिहास", "clear_history": "इतिहास साफ़ करें",
+        "detect": "वाहन पहचानें", "random": "रैंडम वैलिडेशन इमेज",
+        "sample": "सैंपल इमेज", "input": "इनपुट इमेज", "result": "पहचान परिणाम",
+    },
+    "Spanish": {
+        "settings": "Configuración", "theme": "Tema de pantalla", "language": "Idioma",
+        "confidence": "Umbral de confianza", "iou": "Umbral IoU (NMS)",
+        "image_size": "Tamaño de inferencia", "max_detections": "Detecciones máximas",
+        "run_history": "Historial de ejecuciones", "clear_history": "Borrar historial",
+        "detect": "Detectar vehículos", "random": "Imagen de validación aleatoria",
+        "sample": "Imagen de muestra", "input": "Imagen de entrada", "result": "Resultado",
+    },
+    "French": {
+        "settings": "Paramètres", "theme": "Thème d'affichage", "language": "Langue",
+        "confidence": "Seuil de confiance", "iou": "Seuil IoU (NMS)",
+        "image_size": "Taille d'inférence", "max_detections": "Détections maximales",
+        "run_history": "Historique des exécutions", "clear_history": "Effacer l'historique",
+        "detect": "Détecter les véhicules", "random": "Image de validation aléatoire",
+        "sample": "Image échantillon", "input": "Image d'entrée", "result": "Résultat",
+    },
+    "German": {
+        "settings": "Einstellungen", "theme": "Darstellung", "language": "Sprache",
+        "confidence": "Konfidenzschwelle", "iou": "IoU-Schwelle (NMS)",
+        "image_size": "Inferenzbildgröße", "max_detections": "Maximale Erkennungen",
+        "run_history": "Verlauf", "clear_history": "Verlauf löschen",
+        "detect": "Fahrzeuge erkennen", "random": "Zufälliges Validierungsbild",
+        "sample": "Beispielbild", "input": "Eingabebild", "result": "Ergebnis",
+    },
+    "Japanese": {
+        "settings": "設定", "theme": "表示テーマ", "language": "言語",
+        "confidence": "信頼度しきい値", "iou": "IoUしきい値 (NMS)",
+        "image_size": "推論画像サイズ", "max_detections": "最大検出数",
+        "run_history": "実行履歴", "clear_history": "履歴を消去",
+        "detect": "車両を検出", "random": "ランダム検証画像",
+        "sample": "サンプル画像", "input": "入力画像", "result": "検出結果",
+    },
+    "Chinese": {
+        "settings": "设置", "theme": "显示主题", "language": "语言",
+        "confidence": "置信度阈值", "iou": "IoU 阈值 (NMS)",
+        "image_size": "推理图像大小", "max_detections": "最大检测数",
+        "run_history": "运行历史", "clear_history": "清除历史",
+        "detect": "检测车辆", "random": "随机验证图像",
+        "sample": "示例图像", "input": "输入图像", "result": "检测结果",
+    },
+}
+
 # ── Get sample image paths ───────────────────────────────────────────────────
 IMAGE_ROOTS = (
     os.path.join(BASE_DIR, "data", "images"),
@@ -71,7 +131,14 @@ SAMPLE_PATH_BY_LABEL = {label: path for path, label in SAMPLE_LABELS.items()}
 SAMPLE_OPTIONS = ["Select a sample image"] + list(SAMPLE_PATH_BY_LABEL)
 
 # ── Detection function ───────────────────────────────────────────────────────
-def detect_vehicles(image, confidence_threshold, iou_threshold, detector):
+def detect_vehicles(
+    image,
+    confidence_threshold,
+    iou_threshold,
+    detector,
+    image_size=640,
+    max_detections=300,
+):
     """Run YOLOv8 inference and return annotated image + detection summary."""
     if image is None:
         return None, "⚠️ Please upload an image first."
@@ -80,7 +147,8 @@ def detect_vehicles(image, confidence_threshold, iou_threshold, detector):
         source=image,
         conf=confidence_threshold,
         iou=iou_threshold,
-        imgsz=640,
+        imgsz=image_size,
+        max_det=max_detections,
         verbose=False,
     )
 
@@ -152,6 +220,23 @@ def load_random_sample():
 st.set_page_config(page_title="Military Vehicle Detection", page_icon="🎖️", layout="wide")
 
 st.session_state.setdefault("inference_history", [])
+st.session_state.setdefault("selected_image", None)
+st.session_state.setdefault("selected_image_source", None)
+st.session_state.setdefault("loaded_run_id", None)
+st.session_state.setdefault("language", "English")
+labels = TRANSLATIONS[st.session_state["language"]]
+
+pending_load = st.session_state.pop("pending_load", None)
+if pending_load is not None:
+    st.session_state["selected_image"] = pending_load["input"]
+    st.session_state["selected_image_source"] = pending_load.get("source", "Image")
+    st.session_state["annotated_image"] = pending_load["output"]
+    st.session_state["detection_summary"] = pending_load["summary"]
+    st.session_state["confidence_threshold"] = pending_load["confidence"]
+    st.session_state["iou_threshold"] = pending_load["iou"]
+    st.session_state["image_size"] = pending_load.get("image_size", 640)
+    st.session_state["max_detections"] = pending_load.get("max_detections", 300)
+    st.session_state["loaded_run_id"] = pending_load["id"]
 
 st.markdown("""
 <style>
@@ -164,6 +249,26 @@ st.markdown("""
 <p>Model: best.pt (epoch 47) | mAP50: 85.9% | mAP50-95: 59.2%</p>
 </div>
 """, unsafe_allow_html=True)
+
+theme_css = {
+    "Dark": """
+        <style>
+        [data-testid="stAppViewContainer"] { background: #0f1117; color: #f4f4f4; }
+        [data-testid="stSidebar"] { background: #171a21; }
+        </style>
+    """,
+    "Light": """
+        <style>
+        [data-testid="stAppViewContainer"] { background: #f7f8fb; color: #172033; }
+        [data-testid="stSidebar"] { background: #eef1f6; }
+        </style>
+    """,
+    "System": """
+        <style>
+        [data-testid="stAppViewContainer"] { color-scheme: light dark; }
+        </style>
+    """,
+}
 
 try:
     model = load_model()
@@ -184,23 +289,37 @@ with left:
         )
 
     selected_sample = st.selectbox(
-        "📂 Sample Image",
+        f"📂 {labels['sample']}",
         SAMPLE_OPTIONS,
         index=SAMPLE_OPTIONS.index(st.session_state.get("selected_sample", SAMPLE_OPTIONS[0]))
         if st.session_state.get("selected_sample", SAMPLE_OPTIONS[0]) in SAMPLE_OPTIONS
         else 0,
     )
     st.session_state["selected_sample"] = selected_sample
-    detect_clicked = st.button("🔍 Detect Vehicles", type="primary", use_container_width=True)
-    random_clicked = st.button("🎲 Random Val Image", use_container_width=True)
+    detect_clicked = st.button(f"🔍 {labels['detect']}", type="primary", use_container_width=True)
+    random_clicked = st.button(f"🎲 {labels['random']}", use_container_width=True)
 
 if random_clicked:
     st.session_state["selected_sample"] = SAMPLE_OPTIONS[0]
 
 with st.sidebar:
-    st.header("⚙️ Settings")
-    display_theme = st.radio("Display Theme", ["Dark", "Light", "System"], index=0)
-    language = st.selectbox("Language", ["English"], index=0)
+    st.header(f"⚙️ {labels['settings']}")
+    display_theme = st.radio("Display Theme", ["Dark", "Light", "System"], index=0, key="display_theme")
+    language = st.selectbox(
+        labels["language"],
+        ["English", "Hindi", "Spanish", "French", "German", "Japanese", "Chinese"],
+        index=0,
+        key="language",
+    )
+    labels = TRANSLATIONS[language]
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] { font-size: 0.95rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.checkbox(
         "Progressive Web App",
         value=False,
@@ -214,17 +333,24 @@ with st.sidebar:
         help="Screen Studio is a Gradio feature and is not available in Streamlit.",
     )
     confidence_threshold = st.slider(
-        "Confidence Threshold", 0.1, 0.95, 0.25, 0.05,
+        labels["confidence"], 0.1, 0.95, 0.25, 0.05,
         help="Minimum confidence to show a detection",
+        key="confidence_threshold",
     )
     iou_threshold = st.slider(
-        "IoU Threshold (NMS)", 0.1, 0.95, 0.45, 0.05,
+        labels["iou"], 0.1, 0.95, 0.45, 0.05,
         help="Non-max suppression overlap threshold",
+        key="iou_threshold",
     )
+    image_size = st.select_slider(
+        labels["image_size"], options=[320, 480, 640, 800, 1024], value=640, key="image_size"
+    )
+    max_detections = st.slider(labels["max_detections"], 1, 300, 300, 1, key="max_detections")
     st.caption(f"Language: {language} | Theme: {display_theme}")
+    st.markdown(theme_css[display_theme], unsafe_allow_html=True)
 
-    st.subheader("Run History")
-    if st.button("Clear history", use_container_width=True):
+    st.subheader(labels["run_history"])
+    if st.button(labels["clear_history"], use_container_width=True):
         st.session_state["inference_history"] = []
         st.rerun()
     st.caption(f"{len(st.session_state['inference_history'])} inference(s) saved in this browser session")
@@ -235,7 +361,9 @@ with right:
     info_placeholder = st.empty()
 
 image = None
-if random_clicked:
+if st.session_state.get("loaded_run_id") is not None:
+    image = st.session_state.get("selected_image")
+elif random_clicked:
     image = load_random_sample()
 elif uploaded_file is not None:
     image_bytes = uploaded_file.getvalue()
@@ -269,7 +397,7 @@ if detect_clicked or random_clicked:
     else:
         try:
             annotated, summary = detect_vehicles(
-                image, confidence_threshold, iou_threshold, model
+                image, confidence_threshold, iou_threshold, model, image_size, max_detections
             )
             st.session_state["annotated_image"] = annotated
             st.session_state["detection_summary"] = summary
@@ -280,7 +408,11 @@ if detect_clicked or random_clicked:
                     "output": annotated.copy(),
                     "confidence": confidence_threshold,
                     "iou": iou_threshold,
+                    "image_size": image_size,
+                    "max_detections": max_detections,
                     "summary": summary,
+                    "timestamp": datetime.now().astimezone(),
+                    "source": "Image",
                 },
             )
             st.session_state["inference_history"] = st.session_state["inference_history"][:100]
@@ -300,7 +432,7 @@ if webcam_detect_clicked:
                 raise ValueError("The webcam frame could not be decoded as an image.")
             webcam_image = cv2.cvtColor(webcam_image, cv2.COLOR_BGR2RGB)
             annotated, summary = detect_vehicles(
-                webcam_image, confidence_threshold, iou_threshold, model
+                webcam_image, confidence_threshold, iou_threshold, model, image_size, max_detections
             )
             st.session_state["annotated_image"] = annotated
             st.session_state["detection_summary"] = summary
@@ -311,7 +443,11 @@ if webcam_detect_clicked:
                     "output": annotated.copy(),
                     "confidence": confidence_threshold,
                     "iou": iou_threshold,
+                    "image_size": image_size,
+                    "max_detections": max_detections,
                     "summary": summary,
+                    "timestamp": datetime.now().astimezone(),
+                    "source": "Webcam",
                 },
             )
             st.session_state["inference_history"] = st.session_state["inference_history"][:100]
@@ -344,7 +480,34 @@ with st.expander(f"🧾 Run History ({len(st.session_state['inference_history'])
         st.info("No completed detections in this browser session.")
     else:
         for index, entry in enumerate(st.session_state["inference_history"], start=1):
-            st.markdown(f"**Run {index}** | Confidence: `{entry['confidence']:.2f}` | IoU: `{entry['iou']:.2f}`")
+            run_id = entry.setdefault("id", f"run-{index}-{entry.get('timestamp', datetime.now()).timestamp()}")
+            timestamp = entry.get("timestamp")
+            if isinstance(timestamp, str):
+                timestamp = datetime.fromisoformat(timestamp)
+            timestamp_text = timestamp.strftime("%d %b %Y, %I:%M %p") if timestamp else "Unknown time"
+            st.markdown(
+                f"**Run {index}** | {timestamp_text} | Source: `{entry.get('source', 'Image')}` | "
+                f"Confidence: `{entry['confidence']:.2f}` | IoU: `{entry['iou']:.2f}`"
+            )
+            action_load, action_delete = st.columns(2)
+            with action_load:
+                if st.button("📂 Load Run", key=f"load-{run_id}", use_container_width=True):
+                    st.session_state["pending_load"] = {
+                        "id": run_id,
+                        "input": entry["input"],
+                        "output": entry["output"],
+                        "summary": entry["summary"],
+                        "confidence": entry["confidence"],
+                        "iou": entry["iou"],
+                        "image_size": entry.get("image_size", 640),
+                        "max_detections": entry.get("max_detections", 300),
+                        "source": entry.get("source", "Image"),
+                    }
+                    st.rerun()
+            with action_delete:
+                if st.button("🗑️ Delete", key=f"delete-{run_id}", use_container_width=True):
+                    st.session_state["inference_history"].pop(index - 1)
+                    st.rerun()
             history_input, history_output = st.columns(2)
             with history_input:
                 st.image(entry["input"], caption="Input image", use_container_width=True)
