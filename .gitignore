@@ -6,7 +6,16 @@
 
 # Datasets
 MVRSD_dataset/
-data/
+data/*
+!data/images/
+data/images/*
+!data/images/val/
+data/images/val/*
+!data/images/val/AUAU010003.jpg
+!data/images/val/AUAU010007.jpg
+!data/images/val/AUAU010011.jpg
+!data/images/val/AUAU010019.jpg
+!data/images/val/AUAU010025.jpg
 
 # Training artifacts & runs
 results/
