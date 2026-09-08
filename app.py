@@ -41,9 +41,34 @@ CLASS_INFO = {
 }
 
 # ── Get sample image paths ───────────────────────────────────────────────────
-ALL_VAL_IMAGES = sorted(glob.glob(os.path.join(VAL_DIR, "*.jpg")))
-random.seed(42)
-SAMPLE_PATHS = random.sample(ALL_VAL_IMAGES, min(12, len(ALL_VAL_IMAGES)))
+IMAGE_ROOTS = (
+    os.path.join(BASE_DIR, "data", "images"),
+    os.path.join(BASE_DIR, "data", "test"),
+    os.path.join(BASE_DIR, "MVRSD_dataset"),
+)
+IMAGE_EXTENSIONS = ("*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG")
+
+
+def collect_sample_images():
+    """Collect all project images while ignoring duplicate dataset copies."""
+    images_by_name = {}
+    for root in IMAGE_ROOTS:
+        if not os.path.isdir(root):
+            continue
+        for extension in IMAGE_EXTENSIONS:
+            for path in glob.glob(os.path.join(root, "**", extension), recursive=True):
+                key = os.path.basename(path).lower()
+                images_by_name.setdefault(key, path)
+    return sorted(images_by_name.values(), key=lambda path: os.path.basename(path).lower())
+
+
+ALL_SAMPLE_IMAGES = collect_sample_images()
+SAMPLE_LABELS = {
+    path: f"{os.path.basename(path)} ({os.path.relpath(path, BASE_DIR)})"
+    for path in ALL_SAMPLE_IMAGES
+}
+SAMPLE_PATH_BY_LABEL = {label: path for path, label in SAMPLE_LABELS.items()}
+SAMPLE_OPTIONS = ["Select a sample image"] + list(SAMPLE_PATH_BY_LABEL)
 
 # ── Detection function ───────────────────────────────────────────────────────
 def detect_vehicles(image, confidence_threshold, iou_threshold, detector):
@@ -108,11 +133,11 @@ def detect_vehicles(image, confidence_threshold, iou_threshold, detector):
 
 
 def load_random_sample():
-    """Load a random validation image, avoiding the previous image."""
+    """Load a random image from the complete sample pool."""
     previous_path = st.session_state.get("random_sample_path")
-    candidates = [path for path in ALL_VAL_IMAGES if path != previous_path]
+    candidates = [path for path in ALL_SAMPLE_IMAGES if path != previous_path]
     if not candidates:
-        candidates = ALL_VAL_IMAGES
+        candidates = ALL_SAMPLE_IMAGES
     if not candidates:
         return None
 
@@ -150,12 +175,11 @@ st.subheader("Detect vehicles")
 left, right = st.columns(2)
 with left:
     uploaded_file = st.file_uploader("📸 Input Image", type=["jpg", "jpeg", "png"])
-    sample_options = ["Select a validation sample"] + SAMPLE_PATHS
     selected_sample = st.selectbox(
-        "📂 Validation Samples",
-        sample_options,
-        index=sample_options.index(st.session_state.get("selected_sample", sample_options[0]))
-        if st.session_state.get("selected_sample", sample_options[0]) in sample_options
+        "📂 Sample Image",
+        SAMPLE_OPTIONS,
+        index=SAMPLE_OPTIONS.index(st.session_state.get("selected_sample", SAMPLE_OPTIONS[0]))
+        if st.session_state.get("selected_sample", SAMPLE_OPTIONS[0]) in SAMPLE_OPTIONS
         else 0,
     )
     st.session_state["selected_sample"] = selected_sample
@@ -163,7 +187,7 @@ with left:
     random_clicked = st.button("🎲 Random Val Image", use_container_width=True)
 
 if random_clicked:
-    st.session_state["selected_sample"] = sample_options[0]
+    st.session_state["selected_sample"] = SAMPLE_OPTIONS[0]
 
 with st.sidebar:
     st.header("⚙️ Settings")
@@ -210,8 +234,8 @@ elif uploaded_file is not None:
     image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
     if image is not None:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-elif selected_sample != "Select a validation sample":
-    image = cv2.imread(selected_sample)
+elif selected_sample != SAMPLE_OPTIONS[0]:
+    image = cv2.imread(SAMPLE_PATH_BY_LABEL[selected_sample])
     if image is not None:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
