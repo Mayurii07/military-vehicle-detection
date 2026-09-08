@@ -11,6 +11,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 import streamlit as st
+import torch
 from ultralytics import YOLO
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -46,6 +47,9 @@ TRANSLATIONS = {
         "settings": "Settings", "theme": "Display Theme", "language": "Language",
         "confidence": "Confidence Threshold", "iou": "IoU Threshold (NMS)",
         "image_size": "Inference Image Size", "max_detections": "Maximum Detections",
+        "classes": "Vehicle Classes", "tta": "Test-Time Augmentation",
+        "device": "Inference Device", "history_limit": "Maximum History Runs",
+        "reset": "Reset to Defaults", "download": "Download Result",
         "run_history": "Run History", "clear_history": "Clear history",
         "detect": "Detect Vehicles", "random": "Random Val Image",
         "sample": "Sample Image", "input": "Input Image", "result": "Detection Result",
@@ -54,6 +58,9 @@ TRANSLATIONS = {
         "settings": "सेटिंग्स", "theme": "डिस्प्ले थीम", "language": "भाषा",
         "confidence": "विश्वास सीमा", "iou": "IoU सीमा (NMS)",
         "image_size": "इन्फरेंस इमेज आकार", "max_detections": "अधिकतम पहचान",
+        "classes": "वाहन वर्ग", "tta": "टेस्ट-टाइम ऑगमेंटेशन",
+        "device": "इन्फरेंस डिवाइस", "history_limit": "अधिकतम इतिहास रन",
+        "reset": "डिफ़ॉल्ट पर रीसेट करें", "download": "परिणाम डाउनलोड करें",
         "run_history": "रन इतिहास", "clear_history": "इतिहास साफ़ करें",
         "detect": "वाहन पहचानें", "random": "रैंडम वैलिडेशन इमेज",
         "sample": "सैंपल इमेज", "input": "इनपुट इमेज", "result": "पहचान परिणाम",
@@ -62,6 +69,9 @@ TRANSLATIONS = {
         "settings": "Configuración", "theme": "Tema de pantalla", "language": "Idioma",
         "confidence": "Umbral de confianza", "iou": "Umbral IoU (NMS)",
         "image_size": "Tamaño de inferencia", "max_detections": "Detecciones máximas",
+        "classes": "Clases de vehículos", "tta": "Aumento en tiempo de prueba",
+        "device": "Dispositivo de inferencia", "history_limit": "Máximo de ejecuciones",
+        "reset": "Restablecer valores", "download": "Descargar resultado",
         "run_history": "Historial de ejecuciones", "clear_history": "Borrar historial",
         "detect": "Detectar vehículos", "random": "Imagen de validación aleatoria",
         "sample": "Imagen de muestra", "input": "Imagen de entrada", "result": "Resultado",
@@ -70,6 +80,9 @@ TRANSLATIONS = {
         "settings": "Paramètres", "theme": "Thème d'affichage", "language": "Langue",
         "confidence": "Seuil de confiance", "iou": "Seuil IoU (NMS)",
         "image_size": "Taille d'inférence", "max_detections": "Détections maximales",
+        "classes": "Classes de véhicules", "tta": "Augmentation au test",
+        "device": "Appareil d'inférence", "history_limit": "Exécutions historiques maximales",
+        "reset": "Réinitialiser", "download": "Télécharger le résultat",
         "run_history": "Historique des exécutions", "clear_history": "Effacer l'historique",
         "detect": "Détecter les véhicules", "random": "Image de validation aléatoire",
         "sample": "Image échantillon", "input": "Image d'entrée", "result": "Résultat",
@@ -78,6 +91,9 @@ TRANSLATIONS = {
         "settings": "Einstellungen", "theme": "Darstellung", "language": "Sprache",
         "confidence": "Konfidenzschwelle", "iou": "IoU-Schwelle (NMS)",
         "image_size": "Inferenzbildgröße", "max_detections": "Maximale Erkennungen",
+        "classes": "Fahrzeugklassen", "tta": "Testzeit-Augmentierung",
+        "device": "Inferenzgerät", "history_limit": "Maximale Verlaufsläufe",
+        "reset": "Standards wiederherstellen", "download": "Ergebnis herunterladen",
         "run_history": "Verlauf", "clear_history": "Verlauf löschen",
         "detect": "Fahrzeuge erkennen", "random": "Zufälliges Validierungsbild",
         "sample": "Beispielbild", "input": "Eingabebild", "result": "Ergebnis",
@@ -86,6 +102,9 @@ TRANSLATIONS = {
         "settings": "設定", "theme": "表示テーマ", "language": "言語",
         "confidence": "信頼度しきい値", "iou": "IoUしきい値 (NMS)",
         "image_size": "推論画像サイズ", "max_detections": "最大検出数",
+        "classes": "車両クラス", "tta": "テスト時拡張",
+        "device": "推論デバイス", "history_limit": "履歴の最大実行数",
+        "reset": "デフォルトに戻す", "download": "結果をダウンロード",
         "run_history": "実行履歴", "clear_history": "履歴を消去",
         "detect": "車両を検出", "random": "ランダム検証画像",
         "sample": "サンプル画像", "input": "入力画像", "result": "検出結果",
@@ -94,6 +113,9 @@ TRANSLATIONS = {
         "settings": "设置", "theme": "显示主题", "language": "语言",
         "confidence": "置信度阈值", "iou": "IoU 阈值 (NMS)",
         "image_size": "推理图像大小", "max_detections": "最大检测数",
+        "classes": "车辆类别", "tta": "测试时增强",
+        "device": "推理设备", "history_limit": "最大历史运行数",
+        "reset": "恢复默认设置", "download": "下载结果",
         "run_history": "运行历史", "clear_history": "清除历史",
         "detect": "检测车辆", "random": "随机验证图像",
         "sample": "示例图像", "input": "输入图像", "result": "检测结果",
@@ -131,6 +153,16 @@ SAMPLE_PATH_BY_LABEL = {label: path for path, label in SAMPLE_LABELS.items()}
 SAMPLE_OPTIONS = ["Select a sample image"] + list(SAMPLE_PATH_BY_LABEL)
 
 # ── Detection function ───────────────────────────────────────────────────────
+def resolve_device(device):
+    """Map the UI device choices to a device accepted by Ultralytics."""
+    requested_device = (device or "auto").strip().lower()
+    if requested_device in ("", "auto"):
+        return "cuda:0" if torch.cuda.is_available() else "cpu"
+    if requested_device == "cuda" and not torch.cuda.is_available():
+        return "cpu"
+    return requested_device
+
+
 def detect_vehicles(
     image,
     confidence_threshold,
@@ -138,6 +170,9 @@ def detect_vehicles(
     detector,
     image_size=640,
     max_detections=300,
+    selected_classes=None,
+    use_tta=False,
+    device="auto",
 ):
     """Run YOLOv8 inference and return annotated image + detection summary."""
     if image is None:
@@ -149,6 +184,9 @@ def detect_vehicles(
         iou=iou_threshold,
         imgsz=image_size,
         max_det=max_detections,
+        classes=selected_classes,
+        augment=use_tta,
+        device=resolve_device(device),
         verbose=False,
     )
 
@@ -228,6 +266,8 @@ st.session_state.setdefault("selected_image", None)
 st.session_state.setdefault("selected_image_source", None)
 st.session_state.setdefault("loaded_run_id", None)
 st.session_state.setdefault("language", "English")
+st.session_state.setdefault("history_limit", 100)
+st.session_state.setdefault("device", "Auto")
 labels = TRANSLATIONS[st.session_state["language"]]
 
 pending_load = st.session_state.pop("pending_load", None)
@@ -240,12 +280,16 @@ if pending_load is not None:
     st.session_state["iou_threshold"] = pending_load["iou"]
     st.session_state["image_size"] = pending_load.get("image_size", 640)
     st.session_state["max_detections"] = pending_load.get("max_detections", 300)
+    st.session_state["selected_classes"] = pending_load.get("selected_classes", list(CLASS_INFO))
+    st.session_state["use_tta"] = pending_load.get("use_tta", False)
+    st.session_state["device"] = pending_load.get("device", "Auto")
     st.session_state["loaded_run_id"] = pending_load["id"]
 
 st.markdown("""
 <style>
 .hero { background: linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
-        color: white; padding: 24px; border-radius: 12px; text-align: center; }
+    color: #ffffff !important; padding: 24px; border-radius: 12px; text-align: center; }
+.hero h1, .hero p { color: #ffffff !important; }
 </style>
 <div class="hero">
 <h1>🎖️ Military Vehicle Detection System</h1>
@@ -257,22 +301,420 @@ st.markdown("""
 theme_css = {
     "Dark": """
         <style>
-        [data-testid="stAppViewContainer"] { background: #0f1117; color: #f4f4f4; }
-        [data-testid="stSidebar"] { background: #171a21; }
+        :root { color-scheme: dark; }
+        :root, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+            --app-background: #0f1117;
+            --app-surface: #20232c;
+            --app-surface-muted: #171a21;
+            --app-text: #f4f4f4;
+            --app-text-muted: #c8ccd6;
+            --app-border: #454b59;
+            --app-accent: #ff4b4b;
+            --app-focus: #70a7ff;
+            background: var(--app-background);
+            color: var(--app-text);
+        }
+        [data-testid="stSidebar"] {
+            background: var(--app-surface-muted);
+            color: var(--app-text);
+        }
         </style>
     """,
     "Light": """
         <style>
-        [data-testid="stAppViewContainer"] { background: #f7f8fb; color: #172033; }
-        [data-testid="stSidebar"] { background: #eef1f6; }
+        :root { color-scheme: light; }
+        :root, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+            --app-background: #f7f8fb;
+            --app-surface: #ffffff;
+            --app-surface-muted: #eef1f6;
+            --app-text: #172033;
+            --app-text-muted: #4b5568;
+            --app-border: #b8c0ce;
+            --app-accent: #d9363e;
+            --app-focus: #1769aa;
+            background: var(--app-background);
+            color: var(--app-text);
+        }
+        [data-testid="stSidebar"] {
+            background: var(--app-surface-muted);
+            color: var(--app-text);
+        }
         </style>
     """,
     "System": """
         <style>
-        [data-testid="stAppViewContainer"] { color-scheme: light dark; }
+        @media (prefers-color-scheme: dark) {
+            :root { color-scheme: dark; }
+            :root, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+                --app-background: #0f1117;
+                --app-surface: #20232c;
+                --app-surface-muted: #171a21;
+                --app-text: #f4f4f4;
+                --app-text-muted: #c8ccd6;
+                --app-border: #454b59;
+                --app-accent: #ff4b4b;
+                --app-focus: #70a7ff;
+            }
+        }
+        @media (prefers-color-scheme: light) {
+            :root { color-scheme: light; }
+            :root, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+                --app-background: #f7f8fb;
+                --app-surface: #ffffff;
+                --app-surface-muted: #eef1f6;
+                --app-text: #172033;
+                --app-text-muted: #4b5568;
+                --app-border: #b8c0ce;
+                --app-accent: #d9363e;
+                --app-focus: #1769aa;
+            }
+        }
+        [data-testid="stAppViewContainer"] {
+            background: var(--app-background);
+            color: var(--app-text);
+        }
+        [data-testid="stSidebar"] {
+            background: var(--app-surface-muted);
+            color: var(--app-text);
+        }
         </style>
     """,
 }
+
+theme_components_css = """
+<style>
+:root {
+    --app-on-accent: #ffffff;
+}
+[data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+    color: var(--app-text);
+}
+.hero, .hero h1, .hero p {
+    color: #ffffff !important;
+}
+[data-testid="stAppViewContainer"] h1,
+[data-testid="stAppViewContainer"] h2,
+[data-testid="stAppViewContainer"] h3,
+[data-testid="stAppViewContainer"] h4,
+[data-testid="stAppViewContainer"] p,
+[data-testid="stAppViewContainer"] label,
+[data-testid="stAppViewContainer"] [data-testid="stMarkdownContainer"],
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+    color: var(--app-text);
+}
+[data-testid="stAppViewContainer"] small,
+[data-testid="stSidebar"] small,
+[data-testid="stAppViewContainer"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+    color: var(--app-text-muted);
+}
+[data-testid="stAppViewContainer"] input,
+[data-testid="stAppViewContainer"] textarea,
+[data-testid="stSidebar"] input,
+[data-testid="stSidebar"] textarea,
+[data-baseweb="select"] > div,
+[data-testid="stFileUploaderDropzone"],
+[data-testid="stCameraInput"] {
+    background: var(--app-surface);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+[data-baseweb="select"] [role="option"],
+[data-baseweb="popover"] [role="listbox"] {
+    background: var(--app-surface);
+    color: var(--app-text);
+}
+[data-testid="stAppViewContainer"] button,
+[data-testid="stSidebar"] button {
+    background: var(--app-surface);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+[data-testid="stAppViewContainer"] [data-testid="stButton"] button:hover,
+[data-testid="stSidebar"] [data-testid="stButton"] button:hover,
+[data-testid="stExpander"] summary:hover {
+    background: var(--app-surface-muted);
+    border-color: var(--app-focus);
+    color: var(--app-text);
+}
+[data-testid="stAppViewContainer"] button[kind="primary"],
+[data-testid="stAppViewContainer"] [data-testid="baseButton-primary"] {
+    color: var(--app-on-accent) !important;
+    background: var(--app-accent) !important;
+    border-color: var(--app-accent) !important;
+}
+[data-testid="stAppViewContainer"] [data-testid="stFileUploaderDropzone"] button {
+    color: var(--app-text) !important;
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+}
+[data-testid="stFileUploaderDropzone"] small,
+[data-testid="stFileUploaderDropzone"] span,
+[data-testid="stFileUploaderDropzone"] section,
+[data-testid="stFileUploaderDropzone"] svg {
+    color: var(--app-text-muted) !important;
+    fill: currentColor;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary svg {
+    color: var(--app-text) !important;
+    fill: currentColor;
+}
+[data-testid="stSlider"] label,
+[data-testid="stSlider"] [data-testid="stMarkdownContainer"],
+[data-testid="stSlider"] output,
+[data-testid="stSlider"] svg {
+    color: var(--app-text) !important;
+    fill: currentColor;
+}
+[data-testid="stTooltipIcon"],
+[data-testid="stTooltipIcon"] svg,
+[data-testid="stHelp"] svg,
+[data-testid="stWidgetLabel"] svg {
+    color: var(--app-text-muted) !important;
+    fill: currentColor !important;
+    opacity: 1 !important;
+}
+[data-testid="stHeader"], [data-testid="stToolbar"] {
+    background: var(--app-background) !important;
+    color: var(--app-text) !important;
+}
+[data-testid="stHeader"] button, [data-testid="stToolbar"] button,
+[data-testid="stHeader"] a, [data-testid="stToolbar"] a {
+    color: var(--app-text) !important;
+    fill: currentColor !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+    color: var(--app-text) !important;
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] svg,
+[data-testid="stMultiSelect"] [data-baseweb="select"] svg {
+    color: var(--app-text) !important;
+    fill: currentColor !important;
+}
+[data-baseweb="tag"] {
+    color: var(--app-on-accent) !important;
+    background: var(--app-accent) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] span {
+    color: var(--app-on-accent) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button:hover,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button:focus {
+    min-width: 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    color: var(--app-on-accent) !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button *,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button *:hover {
+    color: var(--app-on-accent) !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+[data-baseweb="tag"] svg {
+    color: var(--app-on-accent) !important;
+    fill: currentColor !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+    background: var(--app-surface) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div:last-child,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div:last-child button,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div:last-child button:hover {
+    color: var(--app-text) !important;
+    background: var(--app-surface-muted) !important;
+    border-color: var(--app-border) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div:last-child svg {
+    color: var(--app-text) !important;
+    fill: currentColor !important;
+}
+[data-testid="stMultiSelect"] button[aria-label="Clear all"],
+[data-testid="stMultiSelect"] button[aria-label="Clear all"]:hover {
+    color: var(--app-text) !important;
+    background: var(--app-surface-muted) !important;
+    border-color: var(--app-border) !important;
+}
+[data-testid="stCheckbox"] label,
+[data-testid="stCheckbox"] label p,
+[data-testid="stCheckbox"] label svg {
+    color: var(--app-text) !important;
+    fill: currentColor;
+}
+[data-testid="stCheckbox"] input:disabled + div {
+    border-color: var(--app-border) !important;
+    background: var(--app-surface) !important;
+}
+[data-testid="stMultiSelect"] {
+    --vehicle-input: var(--app-surface);
+    --vehicle-control: var(--app-surface-muted);
+    --vehicle-text: var(--app-text);
+    --vehicle-border: var(--app-border);
+    --vehicle-accent: var(--app-accent);
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"],
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+    background: var(--vehicle-input) !important;
+    background-color: var(--vehicle-input) !important;
+    border-color: var(--vehicle-border) !important;
+    color: var(--vehicle-text) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div {
+    background: transparent !important;
+    color: var(--vehicle-text) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] input,
+[data-testid="stMultiSelect"] [data-baseweb="select"] input::placeholder {
+    background: transparent !important;
+    color: var(--vehicle-text) !important;
+    caret-color: var(--vehicle-text);
+    opacity: 1;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div:last-child button {
+    background: var(--vehicle-control) !important;
+    background-color: var(--vehicle-control) !important;
+    border-color: var(--vehicle-border) !important;
+    color: var(--vehicle-text) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div:last-child svg,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div:last-child path {
+    color: var(--vehicle-text) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    min-width: 3.6rem !important;
+    margin: 0.2rem 0.25rem 0.2rem 0 !important;
+    padding: 0.35rem 0.55rem 0.35rem 0.7rem !important;
+    background: var(--vehicle-accent) !important;
+    background-color: var(--vehicle-accent) !important;
+    color: var(--app-on-accent) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] * {
+    color: var(--app-on-accent) !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] > span,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] > div:first-child {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    white-space: nowrap !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button:hover,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button:focus,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button svg,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button path {
+    flex: 0 0 1.35rem !important;
+    min-width: 1.35rem !important;
+    width: 1.35rem !important;
+    height: 1.35rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: var(--app-on-accent) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button:hover,
+[data-testid="stMultiSelect"] [data-baseweb="tag"] button:focus-visible {
+    background: rgba(255, 255, 255, 0.2) !important;
+    outline: 2px solid rgba(255, 255, 255, 0.85) !important;
+    outline-offset: 1px;
+}
+[data-testid="stMultiSelect"] [data-baseweb="select"]:focus-within {
+    border-color: var(--app-focus) !important;
+    box-shadow: 0 0 0 1px var(--app-focus) !important;
+}
+[data-testid="stMultiSelect"] button[aria-label="Clear all"],
+[data-testid="stMultiSelect"] button[aria-label="Clear all"]:hover,
+[data-testid="stMultiSelect"] button[aria-label="Clear all"]:focus {
+    background: var(--vehicle-control) !important;
+    background-color: var(--vehicle-control) !important;
+    border-color: var(--vehicle-border) !important;
+    color: var(--vehicle-text) !important;
+}
+[data-testid="stMultiSelect"] button[aria-label="Clear all"] svg,
+[data-testid="stMultiSelect"] button[aria-label="Clear all"] path {
+    color: var(--vehicle-text) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+body:has([data-testid="stMultiSelect"] [data-baseweb="select"] input:focus) [data-baseweb="popover"],
+body:has([data-testid="stMultiSelect"] [data-baseweb="select"] [aria-expanded="true"]) [data-baseweb="popover"] {
+    background: var(--vehicle-input) !important;
+    border-color: var(--vehicle-border) !important;
+}
+body:has([data-testid="stMultiSelect"] [data-baseweb="select"] input:focus) [data-baseweb="popover"] [role="option"],
+body:has([data-testid="stMultiSelect"] [data-baseweb="select"] [aria-expanded="true"]) [data-baseweb="popover"] [role="option"] {
+    background: var(--vehicle-input) !important;
+    color: var(--vehicle-text) !important;
+}
+body:has([data-testid="stMultiSelect"] [data-baseweb="select"] input:focus) [data-baseweb="popover"] [role="option"]:hover,
+body:has([data-testid="stMultiSelect"] [data-baseweb="select"] [aria-expanded="true"]) [data-baseweb="popover"] [role="option"]:hover {
+    background: var(--vehicle-control) !important;
+    color: var(--vehicle-text) !important;
+}
+[data-testid="stAppViewContainer"] button:disabled,
+[data-testid="stSidebar"] button:disabled {
+    color: var(--app-text-muted);
+    opacity: 0.65;
+}
+[data-testid="stAppViewContainer"] input::placeholder,
+[data-testid="stSidebar"] input::placeholder {
+    color: var(--app-text-muted);
+    opacity: 1;
+}
+[data-testid="stAppViewContainer"] input:focus,
+[data-testid="stAppViewContainer"] textarea:focus,
+[data-testid="stSidebar"] input:focus,
+[data-testid="stSidebar"] textarea:focus,
+[data-baseweb="select"] > div:focus-within {
+    border-color: var(--app-focus) !important;
+    box-shadow: 0 0 0 1px var(--app-focus) !important;
+}
+[data-testid="stAppViewContainer"] [data-testid="stAlert"],
+[data-testid="stSidebar"] [data-testid="stAlert"] {
+    color: var(--app-text);
+}
+[data-testid="stAppViewContainer"] hr,
+[data-testid="stSidebar"] hr {
+    border-color: var(--app-border);
+}
+</style>
+"""
 
 try:
     model = load_model()
@@ -350,14 +792,43 @@ with st.sidebar:
         labels["image_size"], options=[320, 480, 640, 800, 1024], value=640, key="image_size"
     )
     max_detections = st.slider(labels["max_detections"], 1, 300, 300, 1, key="max_detections")
+    with st.container(border=True):
+        selected_classes = st.pills(
+            labels["classes"],
+            list(CLASS_INFO),
+            selection_mode="multi",
+            default=list(CLASS_INFO),
+            key="selected_classes",
+            help="Only selected vehicle classes are returned by the model.",
+            label_visibility="visible",
+        )
+    use_tta = st.checkbox(
+        labels["tta"], value=False, key="use_tta",
+        help="Run augmented inference for potentially better accuracy at extra cost.",
+    )
+    device_options = ["Auto", "CPU"] + (["CUDA"] if torch.cuda.is_available() else [])
+    device = st.selectbox(labels["device"], device_options, key="device")
+    history_limit = st.slider(labels["history_limit"], 1, 100, 100, 1, key="history_limit")
+    if st.button(labels["reset"], use_container_width=True):
+        for key, value in {
+            "display_theme": "Dark", "language": "English", "confidence_threshold": 0.25,
+            "iou_threshold": 0.45, "image_size": 640, "max_detections": 300,
+            "selected_classes": list(CLASS_INFO), "use_tta": False, "device": "Auto",
+            "history_limit": 100,
+        }.items():
+            st.session_state[key] = value
+        st.rerun()
+
     st.caption(f"Language: {language} | Theme: {display_theme}")
-    st.markdown(theme_css[display_theme], unsafe_allow_html=True)
+    st.markdown(theme_css[display_theme] + theme_components_css, unsafe_allow_html=True)
 
     st.subheader(labels["run_history"])
     if st.button(labels["clear_history"], use_container_width=True):
         st.session_state["inference_history"] = []
         st.rerun()
     st.caption(f"{len(st.session_state['inference_history'])} inference(s) saved in this browser session")
+
+selected_class_ids = [list(CLASS_INFO).index(name) for name in selected_classes]
 
 with right:
     st.subheader("🎯 Detection Result")
@@ -398,10 +869,13 @@ if image is not None:
 if detect_clicked or random_clicked:
     if image is None:
         info_placeholder.warning("Please upload an image or choose a validation sample first.")
+    elif not selected_class_ids:
+        info_placeholder.warning("Select at least one vehicle class in Settings.")
     else:
         try:
             annotated, summary = detect_vehicles(
-                image, confidence_threshold, iou_threshold, model, image_size, max_detections
+                image, confidence_threshold, iou_threshold, model, image_size, max_detections,
+                selected_class_ids, use_tta, device.lower()
             )
             st.session_state["annotated_image"] = annotated
             st.session_state["detection_summary"] = summary
@@ -414,18 +888,23 @@ if detect_clicked or random_clicked:
                     "iou": iou_threshold,
                     "image_size": image_size,
                     "max_detections": max_detections,
+                    "selected_classes": selected_classes,
+                    "use_tta": use_tta,
+                    "device": device,
                     "summary": summary,
                     "timestamp": datetime.now().astimezone(),
                     "source": "Image",
                 },
             )
-            st.session_state["inference_history"] = st.session_state["inference_history"][:100]
+            st.session_state["inference_history"] = st.session_state["inference_history"][:history_limit]
         except Exception as error:
             info_placeholder.error(f"Detection failed: {error}")
 
 if webcam_detect_clicked:
     if webcam_frame is None:
         info_placeholder.warning("Allow camera access and capture a frame first.")
+    elif not selected_class_ids:
+        info_placeholder.warning("Select at least one vehicle class in Settings.")
     else:
         try:
             webcam_bytes = webcam_frame.getvalue()
@@ -436,7 +915,8 @@ if webcam_detect_clicked:
                 raise ValueError("The webcam frame could not be decoded as an image.")
             webcam_image = cv2.cvtColor(webcam_image, cv2.COLOR_BGR2RGB)
             annotated, summary = detect_vehicles(
-                webcam_image, confidence_threshold, iou_threshold, model, image_size, max_detections
+                webcam_image, confidence_threshold, iou_threshold, model, image_size, max_detections,
+                selected_class_ids, use_tta, device.lower()
             )
             st.session_state["annotated_image"] = annotated
             st.session_state["detection_summary"] = summary
@@ -449,12 +929,15 @@ if webcam_detect_clicked:
                     "iou": iou_threshold,
                     "image_size": image_size,
                     "max_detections": max_detections,
+                    "selected_classes": selected_classes,
+                    "use_tta": use_tta,
+                    "device": device,
                     "summary": summary,
                     "timestamp": datetime.now().astimezone(),
                     "source": "Webcam",
                 },
             )
-            st.session_state["inference_history"] = st.session_state["inference_history"][:100]
+            st.session_state["inference_history"] = st.session_state["inference_history"][:history_limit]
         except Exception as error:
             info_placeholder.error(f"Webcam detection failed: {error}")
 
@@ -465,6 +948,11 @@ if "annotated_image" in st.session_state:
         width="stretch",
     )
     info_placeholder.markdown(st.session_state["detection_summary"])
+    result_bytes = cv2.imencode(".png", cv2.cvtColor(st.session_state["annotated_image"], cv2.COLOR_RGB2BGR))[1].tobytes()
+    st.download_button(
+        labels["download"], result_bytes, "vehicle-detection-result.png", "image/png",
+        use_container_width=True,
+    )
 
 with st.expander("📊 Model Performance Summary"):
     st.markdown("""
@@ -505,6 +993,9 @@ with st.expander(f"🧾 Run History ({len(st.session_state['inference_history'])
                         "iou": entry["iou"],
                         "image_size": entry.get("image_size", 640),
                         "max_detections": entry.get("max_detections", 300),
+                        "selected_classes": entry.get("selected_classes", list(CLASS_INFO)),
+                        "use_tta": entry.get("use_tta", False),
+                        "device": entry.get("device", "Auto"),
                         "source": entry.get("source", "Image"),
                     }
                     st.rerun()
