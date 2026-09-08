@@ -175,6 +175,14 @@ st.subheader("Detect vehicles")
 left, right = st.columns(2)
 with left:
     uploaded_file = st.file_uploader("📸 Input Image", type=["jpg", "jpeg", "png"])
+    with st.expander("📹 Webcam Feed"):
+        webcam_frame = st.camera_input("Capture a vehicle image")
+        webcam_detect_clicked = st.button(
+            "🔍 Detect Webcam Frame",
+            use_container_width=True,
+            disabled=webcam_frame is None,
+        )
+
     selected_sample = st.selectbox(
         "📂 Sample Image",
         SAMPLE_OPTIONS,
@@ -278,6 +286,37 @@ if detect_clicked or random_clicked:
             st.session_state["inference_history"] = st.session_state["inference_history"][:100]
         except Exception as error:
             info_placeholder.error(f"Detection failed: {error}")
+
+if webcam_detect_clicked:
+    if webcam_frame is None:
+        info_placeholder.warning("Allow camera access and capture a frame first.")
+    else:
+        try:
+            webcam_bytes = webcam_frame.getvalue()
+            webcam_image = cv2.imdecode(
+                np.frombuffer(webcam_bytes, np.uint8), cv2.IMREAD_COLOR
+            )
+            if webcam_image is None:
+                raise ValueError("The webcam frame could not be decoded as an image.")
+            webcam_image = cv2.cvtColor(webcam_image, cv2.COLOR_BGR2RGB)
+            annotated, summary = detect_vehicles(
+                webcam_image, confidence_threshold, iou_threshold, model
+            )
+            st.session_state["annotated_image"] = annotated
+            st.session_state["detection_summary"] = summary
+            st.session_state["inference_history"].insert(
+                0,
+                {
+                    "input": webcam_image.copy(),
+                    "output": annotated.copy(),
+                    "confidence": confidence_threshold,
+                    "iou": iou_threshold,
+                    "summary": summary,
+                },
+            )
+            st.session_state["inference_history"] = st.session_state["inference_history"][:100]
+        except Exception as error:
+            info_placeholder.error(f"Webcam detection failed: {error}")
 
 if "annotated_image" in st.session_state:
     output_placeholder.image(
