@@ -126,6 +126,8 @@ def load_random_sample():
 
 st.set_page_config(page_title="Military Vehicle Detection", page_icon="🎖️", layout="wide")
 
+st.session_state.setdefault("inference_history", [])
+
 st.markdown("""
 <style>
 .hero { background: linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
@@ -165,6 +167,20 @@ if random_clicked:
 
 with st.sidebar:
     st.header("⚙️ Settings")
+    display_theme = st.radio("Display Theme", ["Dark", "Light", "System"], index=0)
+    language = st.selectbox("Language", ["English"], index=0)
+    st.checkbox(
+        "Progressive Web App",
+        value=False,
+        disabled=True,
+        help="Gradio PWA installation is not available in Streamlit.",
+    )
+    st.checkbox(
+        "Screen Studio",
+        value=False,
+        disabled=True,
+        help="Screen Studio is a Gradio feature and is not available in Streamlit.",
+    )
     confidence_threshold = st.slider(
         "Confidence Threshold", 0.1, 0.95, 0.25, 0.05,
         help="Minimum confidence to show a detection",
@@ -173,7 +189,13 @@ with st.sidebar:
         "IoU Threshold (NMS)", 0.1, 0.95, 0.45, 0.05,
         help="Non-max suppression overlap threshold",
     )
-    st.caption("These settings match the controls in the original Gradio interface.")
+    st.caption(f"Language: {language} | Theme: {display_theme}")
+
+    st.subheader("Run History")
+    if st.button("Clear history", use_container_width=True):
+        st.session_state["inference_history"] = []
+        st.rerun()
+    st.caption(f"{len(st.session_state['inference_history'])} inference(s) saved in this browser session")
 
 with right:
     st.subheader("🎯 Detection Result")
@@ -219,6 +241,17 @@ if detect_clicked or random_clicked:
             )
             st.session_state["annotated_image"] = annotated
             st.session_state["detection_summary"] = summary
+            st.session_state["inference_history"].insert(
+                0,
+                {
+                    "input": image.copy(),
+                    "output": annotated.copy(),
+                    "confidence": confidence_threshold,
+                    "iou": iou_threshold,
+                    "summary": summary,
+                },
+            )
+            st.session_state["inference_history"] = st.session_state["inference_history"][:100]
         except Exception as error:
             info_placeholder.error(f"Detection failed: {error}")
 
@@ -242,3 +275,18 @@ with st.expander("📊 Model Performance Summary"):
 **Architecture:** YOLOv8n (3.0M params, 8.1 GFLOPs) — trained for 50 epochs on MV-RSD
 **Best checkpoint:** Epoch 47 | **Inference speed:** ~5.2ms/image on RTX 3050
     """)
+
+with st.expander(f"🧾 Run History ({len(st.session_state['inference_history'])})"):
+    if not st.session_state["inference_history"]:
+        st.info("No completed detections in this browser session.")
+    else:
+        for index, entry in enumerate(st.session_state["inference_history"], start=1):
+            st.markdown(f"**Run {index}** | Confidence: `{entry['confidence']:.2f}` | IoU: `{entry['iou']:.2f}`")
+            history_input, history_output = st.columns(2)
+            with history_input:
+                st.image(entry["input"], caption="Input image", use_container_width=True)
+            with history_output:
+                st.image(entry["output"], caption="Detection result", use_container_width=True)
+            st.markdown(entry["summary"])
+            if index < len(st.session_state["inference_history"]):
+                st.divider()
