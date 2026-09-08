@@ -169,7 +169,9 @@ def detect_vehicles(
         color = info["color"]
 
         class_counts[cls_name] = class_counts.get(cls_name, 0) + 1
-        detections_detail.append(f"  {info['emoji']} **{cls_name}** ({info['full']}) — {conf:.1%}")
+        detections_detail.append(
+            f"| {info['emoji']} {cls_name} | {info['full']} | {conf:.1%} |"
+        )
 
         label = f"{cls_name} {conf:.0%}"
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -194,7 +196,9 @@ def detect_vehicles(
             if cls_name in class_counts:
                 info = CLASS_INFO[cls_name]
                 summary += f"| {info['emoji']} {cls_name} ({info['full']}) | {class_counts[cls_name]} |\n"
-        summary += f"\n---\n**Detection details:**\n\n"
+        summary += "\n---\n**Detection details:**\n\n"
+        summary += "| Class | Vehicle Type | Confidence |\n"
+        summary += "|:--|:--|--:|\n"
         summary += "\n".join(detections_detail)
 
     return annotated, summary
